@@ -2,14 +2,13 @@ require "formula"
 
 class ShadowsocksLibev < Formula
   homepage "https://github.com/madeye/shadowsocks-libev"
+  url "https://github.com/madeye/shadowsocks-libev/archive/v1.4.8.tar.gz"
+  sha1 "8261d91dc7184d2edafb9f1f57f70f97fe7d0f2f"
 
-  stable do
-    url "https://github.com/madeye/shadowsocks-libev/archive/v1.4.5.tar.gz"
-    sha1 "d5333f6a749c521826f8e6b866e04d20fbe842fe"
-    patch do
-      url "https://github.com/madeye/shadowsocks-libev/commit/5d0696.diff"
-      sha1 "8b4c8912ad2f56c0ebe63512ee62185ba4c93873"
-    end
+  bottle do
+    sha1 "8b47e5c7d2a1398e8bb6069f5c33bb6a2595574a" => :yosemite
+    sha1 "585d31bf4a6128d490ea51d0199949922056f9e8" => :mavericks
+    sha1 "d78ad3908a3708ddc92151538102cb44b2a05809" => :mountain_lion
   end
 
   head "https://github.com/madeye/shadowsocks-libev.git"
@@ -17,11 +16,8 @@ class ShadowsocksLibev < Formula
   option "with-polarssl", "Use PolarSSL instead of OpenSSL"
 
   depends_on "libev"
-  if build.with? "polarssl"
-    depends_on "polarssl"
-  else
-    depends_on "openssl"
-  end
+  depends_on "polarssl" => :optional
+  depends_on "openssl" if build.without? "polarssl"
 
   def install
     args = ["--prefix=#{prefix}"]

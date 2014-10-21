@@ -1,30 +1,18 @@
 require 'formula'
 
-class UniversalPython < Requirement
-  satisfy(:build_env => false) { archs_for_command("python").universal? }
-
-  def message; <<-EOS.undent
-    A universal build was requested, but Python is not a universal build
-
-    Boost compiles against the Python it finds in the path; if this Python
-    is not a universal build then linking will likely fail.
-    EOS
-  end
-end
-
 class Boost < Formula
   homepage 'http://www.boost.org'
-  url 'https://downloads.sourceforge.net/project/boost/boost/1.55.0/boost_1_55_0.tar.bz2'
-  sha1 'cef9a0cc7084b1d639e06cd3bc34e4251524c840'
-  revision 2
+  url 'https://downloads.sourceforge.net/project/boost/boost/1.56.0/boost_1_56_0.tar.bz2'
+  sha1 'f94bb008900ed5ba1994a1072140590784b9b5df'
 
   head 'https://github.com/boostorg/boost.git'
 
   bottle do
     cellar :any
-    sha1 "4e7dcb53d40c1ec06a9591c2d449b4851bbf5c79" => :mavericks
-    sha1 "69b716880d749452cf58a90e3c70f1b748501a29" => :mountain_lion
-    sha1 "8dbb6c64642d43327adbe0642577b6749f4cb5ba" => :lion
+    revision 1
+    sha1 "ea390cc163c7bc5f4bcebc8dc1dfef0f7a4dbc2d" => :yosemite
+    sha1 "c67641e7b6149c64809fc8d3d0e7e97dcf4ec518" => :mavericks
+    sha1 "d09cea432feca8303106fadb4c27de66b793e2c7" => :mountain_lion
   end
 
   env :userpaths
@@ -35,9 +23,6 @@ class Boost < Formula
   option 'without-static', 'Disable building static library variant'
   option 'with-mpi', 'Build with MPI support'
   option :cxx11
-
-  depends_on :python => :optional
-  depends_on UniversalPython if build.universal? and build.with? "python"
 
   if build.with? 'icu'
     if build.cxx11?
@@ -52,28 +37,6 @@ class Boost < Formula
       depends_on 'open-mpi' => 'c++11'
     else
       depends_on :mpi => [:cc, :cxx, :optional]
-    end
-  end
-
-  stable do
-    # Patches boost::atomic for LLVM 3.4 as it is used on OS X 10.9 with Xcode 5.1
-    # https://github.com/Homebrew/homebrew/issues/27396
-    # https://github.com/Homebrew/homebrew/pull/27436
-    patch :p2 do
-      url "https://github.com/boostorg/atomic/commit/6bb71fdd.diff"
-      sha1 "ca8679011d5293a7fd02cb3b97dde3515b8b2b03"
-    end
-
-    patch :p2 do
-      url "https://github.com/boostorg/atomic/commit/e4bde20f.diff"
-      sha1 "b68f5536474c9f543879698299bd4975538a89eb"
-    end
-
-    # Patch boost::serialization for Clang
-    # https://svn.boost.org/trac/boost/ticket/8757
-    patch :p1 do
-      url "https://gist.githubusercontent.com/philacs/375303205d5f8918e700/raw/d6ded52c3a927b6558984d22efe0a5cf9e59cd8c/0005-Boost.S11n-include-missing-algorithm.patch"
-      sha1 "a37552d48e5c1c0507ee9d48fb82a3fa5e3bc9fa"
     end
   end
 
@@ -92,34 +55,26 @@ class Boost < Formula
       EOS
     end
 
-    if build.cxx11? and build.with? 'mpi' and build.with? 'python'
-      raise <<-EOS.undent
-        Building MPI support for Python using C++11 mode results in
-        failure and hence disabled.  Please don't use this combination
-        of options.
-      EOS
-    end
-
     ENV.universal_binary if build.universal?
 
-    # Force boost to compile using the appropriate GCC version.
+    # Force boost to compile with the desired compiler
     open("user-config.jam", "a") do |file|
       file.write "using darwin : : #{ENV.cxx} ;\n"
       file.write "using mpi ;\n" if build.with? 'mpi'
     end
 
-    # we specify libdir too because the script is apparently broken
-    bargs = ["--prefix=#{prefix}", "--libdir=#{lib}"]
+    # libdir should be set by --prefix but isn't
+    bootstrap_args = ["--prefix=#{prefix}", "--libdir=#{lib}"]
 
     if build.with? 'icu'
       icu4c_prefix = Formula['icu4c'].opt_prefix
-      bargs << "--with-icu=#{icu4c_prefix}"
+      bootstrap_args << "--with-icu=#{icu4c_prefix}"
     else
-      bargs << '--without-icu'
+      bootstrap_args << '--without-icu'
     end
 
     # Handle libraries that will not be built.
-    without_libraries = []
+    without_libraries = ["python"]
 
     # The context library is implemented as x86_64 ASM, so it
     # won't build on PPC or 32-bit builds
@@ -133,12 +88,11 @@ class Boost < Formula
     # Boost.Log cannot be built using Apple GCC at the moment. Disabled
     # on such systems.
     without_libraries << "log" if ENV.compiler == :gcc || ENV.compiler == :llvm
-
-    without_libraries << "python" if build.without? 'python'
     without_libraries << "mpi" if build.without? 'mpi'
 
-    bargs << "--without-libraries=#{without_libraries.join(',')}"
+    bootstrap_args << "--without-libraries=#{without_libraries.join(',')}"
 
+    # layout should be synchronized with boost-python
     args = ["--prefix=#{prefix}",
             "--libdir=#{lib}",
             "-d2",
@@ -170,7 +124,7 @@ class Boost < Formula
       end
     end
 
-    system "./bootstrap.sh", *bargs
+    system "./bootstrap.sh", *bootstrap_args
     system "./b2", *args
   end
 

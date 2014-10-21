@@ -7,9 +7,10 @@ class Sdl < Formula
 
   bottle do
     cellar :any
-    sha1 "c773fb3d4118d4c6b0a9ead984a9893d6e9e88bf" => :mavericks
-    sha1 "6b6e01081d5381a5117a46fa7aa090ce45c18212" => :mountain_lion
-    sha1 "119ef97b48576db0644ef51c9f473affd8b64493" => :lion
+    revision 1
+    sha1 "349711f92cec0b02b53439b3126fe540bfea04e1" => :yosemite
+    sha1 "77ec0e596a9a66c60f843a2528b38d2ef2e4c9f5" => :mavericks
+    sha1 "d27291ac68ac7c22e6c7b35d0e658a65a6f2d189" => :mountain_lion
   end
 
   head do
@@ -28,6 +29,12 @@ class Sdl < Formula
     depends_on "autoconf" => :build
     depends_on "automake" => :build
     depends_on "libtool" => :build
+
+    # Fix build against recent libX11; requires regenerating configure script
+    patch do
+      url "http://hg.libsdl.org/SDL/raw-rev/91ad7b43317a"
+      sha1 "1b35949d9ac360a7e39aac76d1f0a6ad5381b0f4"
+    end
   end
 
   # Fix for a bug preventing SDL from building at all on OSX 10.9 Mavericks
@@ -37,11 +44,11 @@ class Sdl < Formula
     sha1 "3137feb503a89a8d606405373905b92dcf7e293b"
   end
 
-  # Fix build against recent libX11; requires regenerating configure script
+  # Fix compilation error on 10.6 introduced by the above patch
   patch do
-    url "http://hg.libsdl.org/SDL/raw-rev/91ad7b43317a"
-    sha1 "1b35949d9ac360a7e39aac76d1f0a6ad5381b0f4"
-  end if build.with? "x11-driver"
+    url "http://bugzilla-attachments.libsdl.org/attachment.cgi?id=1324"
+    sha1 "08c19f077f56217fd300db390bca4c1a0bee0622"
+  end
 
   def install
     # we have to do this because most build scripts assume that all sdl modules

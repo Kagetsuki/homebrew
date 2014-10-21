@@ -3,20 +3,15 @@ require 'formula'
 class Go < Formula
   homepage 'http://golang.org'
   head 'https://go.googlecode.com/hg/'
-  url 'https://storage.googleapis.com/golang/go1.2.2.src.tar.gz'
-  version '1.2.2'
-  sha1 '3ce0ac4db434fc1546fec074841ff40dc48c1167'
+  url 'https://storage.googleapis.com/golang/go1.3.3.src.tar.gz'
+  version '1.3.3'
+  sha1 'b54b7deb7b7afe9f5d9a3f5dd830c7dede35393a'
 
   bottle do
-    sha1 "cc2867d5043bbd5af3b9637b8ac62d564eeee334" => :mavericks
-    sha1 "daeab2ff21cd4a5682ea687a4a28f1f1c6f3b38e" => :mountain_lion
-    sha1 "73020a28cfddd1c63d3f4efba4e7a81d91b926ff" => :lion
-  end
-
-  devel do
-    url 'https://storage.googleapis.com/golang/go1.3beta2.src.tar.gz'
-    version '1.3beta2'
-    sha1 'd941e02b562402ae8763e0794872ca3a37b1debb'
+    sha1 "07bde6154b7966acda1b6f147393f2deadc1af3f" => :yosemite
+    sha1 "87aa4f7f76278ee21004d0f12f63e38a0b3ff3f2" => :mavericks
+    sha1 "1e5fe0df8f805c96f143568bad1de5e2bc6af82f" => :mountain_lion
+    sha1 "2aa465d9fb98833b80d8f2801153592c1d52bd1a" => :lion
   end
 
   option 'cross-compile-all', "Build the cross-compilers and runtime support for all supported platforms"
@@ -26,16 +21,19 @@ class Go < Formula
   def install
     # install the completion scripts
     bash_completion.install 'misc/bash/go' => 'go-completion.bash'
-    zsh_completion.install 'misc/zsh/go' => 'go'
+    zsh_completion.install 'misc/zsh/go' => '_go'
 
     # host platform (darwin) must come last in the targets list
     if build.include? 'cross-compile-all'
       targets = [
         ['linux',   ['386', 'amd64', 'arm']],
-        ['freebsd', ['386', 'amd64']],
-        ['netbsd',  ['386', 'amd64']],
+        ['freebsd', ['386', 'amd64', 'arm']],
+        ['netbsd',  ['386', 'amd64', 'arm']],
         ['openbsd', ['386', 'amd64']],
         ['windows', ['386', 'amd64']],
+        ['dragonfly', ['386', 'amd64']],
+        ['plan9',   ['386', 'amd64']],
+        ['solaris', ['amd64']],
         ['darwin',  ['386', 'amd64']],
       ]
     elsif build.include? 'cross-compile-common'

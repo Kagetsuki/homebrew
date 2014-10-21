@@ -5,15 +5,14 @@ class GitAnnex < Formula
   include Language::Haskell::Cabal
 
   homepage "https://git-annex.branchable.com/"
-  url "http://hackage.haskell.org/package/git-annex-5.20140421/git-annex-5.20140421.tar.gz"
-  sha1 "f818164eaddf2887a15c0c4c745a1cb8174152dc"
+  url "http://hackage.haskell.org/package/git-annex-5.20141013/git-annex-5.20141013.tar.gz"
+  sha1 "db93f75db07862ce85bdc14adfdac5aba6104f90"
 
   bottle do
     cellar :any
-    revision 1
-    sha1 "b26da4d239a3bb3cb7f09b34f9272f74d7098cce" => :mavericks
-    sha1 "16a56854088be3e0c82463f04d3738dfd24fe458" => :mountain_lion
-    sha1 "444f4575cbfa462c737a260cbad9a4ce57d4d77e" => :lion
+    sha1 "9f353c6f66e8db47bd91a3c0fc65599aca50ad50" => :mavericks
+    sha1 "264534752e8d2c26e49c84a77571f34fba4fac35" => :mountain_lion
+    sha1 "92c21f66c0518b7daf870d230bdf5a6beed80d05" => :lion
   end
 
   depends_on "gcc" => :build
@@ -25,20 +24,25 @@ class GitAnnex < Formula
   depends_on "gnutls"
   depends_on "gmp"
 
+  fails_with(:clang) { build 425 } # clang segfaults on Lion
+
   def install
     cabal_sandbox do
       cabal_install_tools "alex", "happy", "c2hs"
       # gcc required to build gnuidn
-      cabal_install "--with-gcc=#{Formula["gcc"].bin}/gcc", "--only-dependencies"
+      gcc = Formula["gcc"]
+      cabal_install "--with-gcc=#{gcc.bin}/gcc-#{gcc.version_suffix}",
+                    "--only-dependencies"
       cabal_install "--prefix=#{prefix}"
     end
-    system "make", "git-annex.1", "git-annex-shell.1"
-    man1.install "git-annex.1", "git-annex-shell.1"
+    bin.install_symlink "git-annex" => "git-annex-shell"
+    system "make", "git-annex.1", "git-annex-shell.1", "git-union-merge.1"
+    man1.install "git-annex.1", "git-annex-shell.1", "git-union-merge.1"
   end
 
   test do
     # make sure git can find git-annex
-    ENV.prepend_path 'PATH', bin
+    ENV.prepend_path "PATH", bin
     # create a first git repository with an annex
     mkdir "my_annex" do
       system "git", "init"

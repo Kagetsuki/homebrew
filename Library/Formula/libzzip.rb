@@ -5,6 +5,14 @@ class Libzzip < Formula
   url 'https://downloads.sourceforge.net/project/zziplib/zziplib13/0.13.62/zziplib-0.13.62.tar.bz2'
   sha1 'cf8b642abd9db618324a1b98cc71492a007cd687'
 
+  bottle do
+    cellar :any
+    revision 1
+    sha1 "5a1b7004e05d64c363169b7437df6df13dcf442a" => :yosemite
+    sha1 "9ba90a192f579f08425969b07abf9da33cf06b96" => :mavericks
+    sha1 "986d13aa3974d0b7c2621a8447f1aad640f11d92" => :mountain_lion
+  end
+
   option 'sdl', 'Enable SDL usage and create SDL_rwops_zzip.pc'
   option :universal
 

@@ -1,27 +1,29 @@
-require 'formula'
+require "formula"
 
 class Openssl < Formula
-  homepage 'http://openssl.org'
-  url 'https://www.openssl.org/source/openssl-1.0.1g.tar.gz'
-  mirror 'http://mirrors.ibiblio.org/openssl/source/openssl-1.0.1g.tar.gz'
-  sha256 '53cb818c3b90e507a8348f4f5eaedb05d8bfe5358aabb508b7263cc670c3e028'
+  homepage "https://openssl.org"
+  url "https://www.openssl.org/source/openssl-1.0.1j.tar.gz"
+  mirror "https://raw.githubusercontent.com/DomT4/LibreMirror/master/OpenSSL/openssl-1.0.1j.tar.gz"
+  sha256 "1b60ca8789ba6f03e8ef20da2293b8dc131c39d83814e775069f02d26354edf3"
 
   bottle do
-    sha1 "d8c38bb2fe4dfd8930ea02f87d4b958a2a33b051" => :mavericks
-    sha1 "536d1e6bd5e1321eb603b4ed1ad131ea86a2794c" => :mountain_lion
-    sha1 "f12f352e67e5b131c1935040f8d2ca24107ebfca" => :lion
+    sha1 "f6cdb5c0ec14896a385dacf0746768e56e65aed9" => :yosemite
+    sha1 "595305062ba76824570d5c52b2add7f53422dafb" => :mavericks
+    sha1 "dc26c0ea2a7e38451a1b213f7e0f3694f70e460d" => :mountain_lion
+    sha1 "ba064e1f82e3eb54a7272d20c8114d8910bbdf01" => :lion
   end
 
   option :universal
+  option "without-check", "Skip build-time tests (not recommended)"
 
   depends_on "makedepend" => :build
 
   keg_only :provided_by_osx,
-    "The OpenSSL provided by OS X is too old for some software."
+    "Apple has deprecated use of OpenSSL in favor of its own TLS and crypto libraries"
 
   def arch_args
     {
-      :x86_64 => %w[darwin64-x86_64-cc enable-ec_nistp-64_gcc_128],
+      :x86_64 => %w[darwin64-x86_64-cc enable-ec_nistp_64_gcc_128],
       :i386   => %w[darwin-i386-cc],
     }
   end
@@ -29,6 +31,7 @@ class Openssl < Formula
   def configure_args; %W[
       --prefix=#{prefix}
       --openssldir=#{openssldir}
+      no-ssl2
       zlib-dynamic
       shared
       enable-cms
@@ -60,7 +63,7 @@ class Openssl < Formula
       system "perl", "./Configure", *(configure_args + arch_args[arch])
       system "make", "depend"
       system "make"
-      system "make", "test"
+      system "make", "test" if build.with? "check"
 
       if build.universal?
         cp Dir["*.?.?.?.dylib", "*.a", "apps/openssl"], dir
@@ -118,9 +121,9 @@ class Openssl < Formula
   end
 
   test do
-    (testpath/'testfile.txt').write("This is a test file")
+    (testpath/"testfile.txt").write("This is a test file")
     expected_checksum = "91b7b0b1e27bfbf7bc646946f35fa972c47c2d32"
-    system "#{bin}/openssl", 'dgst', '-sha1', '-out', 'checksum.txt', 'testfile.txt'
+    system "#{bin}/openssl", "dgst", "-sha1", "-out", "checksum.txt", "testfile.txt"
     open("checksum.txt") do |f|
       checksum = f.read(100).split("=").last.strip
       assert_equal checksum, expected_checksum

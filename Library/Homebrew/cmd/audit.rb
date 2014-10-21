@@ -3,7 +3,7 @@ require 'utils'
 require 'extend/ENV'
 require 'formula_cellar_checks'
 
-module Homebrew extend self
+module Homebrew
   def audit
     formula_count = 0
     problem_count = 0
@@ -22,24 +22,15 @@ module Homebrew extend self
       fa.audit
 
       unless fa.problems.empty?
-        puts "#{f.name}:"
-        fa.problems.each { |p| puts " * #{p}" }
-        puts
         formula_count += 1
         problem_count += fa.problems.size
+        puts "#{f.name}:", fa.problems.map { |p| " * #{p}" }, ""
       end
     end
 
     unless problem_count.zero?
       ofail "#{problem_count} problems in #{formula_count} formulae"
     end
-  end
-end
-
-class Module
-  def redefine_const(name, value)
-    __send__(:remove_const, name) if const_defined?(name)
-    const_set(name, value)
   end
 end
 
@@ -56,7 +47,7 @@ end
 
 class FormulaText
   def initialize path
-    @text = path.open('r') { |f| f.read }
+    @text = path.open("rb", &:read)
   end
 
   def without_patch
@@ -64,7 +55,7 @@ class FormulaText
   end
 
   def has_DATA?
-    /\bDATA\b/ =~ @text
+    /^[^#]*\bDATA\b/ =~ @text
   end
 
   def has_END?
@@ -101,9 +92,6 @@ class FormulaAuditor
     @problems = []
     @text = f.text.without_patch
     @specs = %w{stable devel head}.map { |s| f.send(s) }.compact
-
-    # We need to do this in case the formula defines a patch that uses DATA.
-    f.class.redefine_const :DATA, ""
   end
 
   def audit_file
@@ -124,58 +112,56 @@ class FormulaAuditor
     end
   end
 
+  @@aliases ||= Formula.aliases
+
   def audit_deps
-    # Don't depend_on aliases; use full name
-    @@aliases ||= Formula.aliases
-    f.deps.select { |d| @@aliases.include? d.name }.each do |d|
-      real_name = d.to_formula.name
-      problem "Dependency '#{d}' is an alias; use the canonical name '#{real_name}'."
-    end
-
-    # Check for things we don't like to depend on.
-    # We allow non-Homebrew installs whenever possible.
-    f.deps.each do |dep|
-      begin
-        dep_f = dep.to_formula
-      rescue TapFormulaUnavailableError
-        # Don't complain about missing cross-tap dependencies
-        next
-      rescue FormulaUnavailableError
-        problem "Can't find dependency #{dep.name.inspect}."
-        next
-      end
-
-      dep.options.reject do |opt|
-        next true if dep_f.build.has_option?(opt.name)
-        dep_f.requirements.detect do |r|
-          if r.tags.include? :recommended
-            opt.name == "with-#{r.name}"
-          elsif r.tags.include? :optional
-            opt.name == "without-#{r.name}"
-          end
+    @specs.each do |spec|
+      # Check for things we don't like to depend on.
+      # We allow non-Homebrew installs whenever possible.
+      spec.deps.each do |dep|
+        begin
+          dep_f = dep.to_formula
+        rescue TapFormulaUnavailableError
+          # Don't complain about missing cross-tap dependencies
+          next
+        rescue FormulaUnavailableError
+          problem "Can't find dependency #{dep.name.inspect}."
+          next
         end
-      end.each do |opt|
-        problem "Dependency #{dep} does not define option #{opt.name.inspect}"
-      end
 
-      case dep.name
-      when *BUILD_TIME_DEPS
-        next if dep.build? or dep.run?
-        problem %{#{dep} dependency should be "depends_on '#{dep}' => :build"}
-      when "git", "ruby", "mercurial"
-        problem <<-EOS.undent
-          Don't use #{dep} as a dependency. We allow non-Homebrew
-          #{dep} installations.
-          EOS
-      when 'gfortran'
-        problem "Use `depends_on :fortran` instead of `depends_on 'gfortran'`"
-      when 'open-mpi', 'mpich2'
-        problem <<-EOS.undent
-          There are multiple conflicting ways to install MPI. Use an MPIDependency:
-            depends_on :mpi => [<lang list>]
-          Where <lang list> is a comma delimited list that can include:
-            :cc, :cxx, :f77, :f90
-          EOS
+        if @@aliases.include?(dep.name)
+          problem "Dependency '#{dep.name}' is an alias; use the canonical name '#{dep.to_formula.name}'."
+        end
+
+        dep.options.reject do |opt|
+          next true if dep_f.option_defined?(opt)
+          dep_f.requirements.detect do |r|
+            if r.recommended?
+              opt.name == "with-#{r.name}"
+            elsif r.optional?
+              opt.name == "without-#{r.name}"
+            end
+          end
+        end.each do |opt|
+          problem "Dependency #{dep} does not define option #{opt.name.inspect}"
+        end
+
+        case dep.name
+        when *BUILD_TIME_DEPS
+          next if dep.build? or dep.run?
+          problem %{#{dep} dependency should be "depends_on '#{dep}' => :build"}
+        when "git", "ruby", "mercurial"
+          problem "Don't use #{dep} as a dependency. We allow non-Homebrew #{dep} installations."
+        when 'gfortran'
+          problem "Use `depends_on :fortran` instead of `depends_on 'gfortran'`"
+        when 'open-mpi', 'mpich2'
+          problem <<-EOS.undent
+            There are multiple conflicting ways to install MPI. Use an MPIDependency:
+              depends_on :mpi => [<lang list>]
+            Where <lang list> is a comma delimited list that can include:
+              :cc, :cxx, :f77, :f90
+            EOS
+        end
       end
     end
   end
@@ -191,19 +177,21 @@ class FormulaAuditor
   end
 
   def audit_urls
-    unless f.homepage =~ %r[^https?://]
-      problem "The homepage should start with http or https (url is #{f.homepage})."
+    homepage = f.homepage
+
+    unless homepage =~ %r[^https?://]
+      problem "The homepage should start with http or https (URL is #{homepage})."
     end
 
     # Check for http:// GitHub homepage urls, https:// is preferred.
     # Note: only check homepages that are repo pages, not *.github.com hosts
-    if f.homepage =~ %r[^http://github\.com/]
-      problem "Use https:// URLs for homepages on GitHub (url is #{f.homepage})."
+    if homepage =~ %r[^http://github\.com/]
+      problem "Use https:// URLs for homepages on GitHub (URL is #{homepage})."
     end
 
     # Google Code homepages should end in a slash
-    if f.homepage =~ %r[^https?://code\.google\.com/p/[^/]+[^/]$]
-      problem "Google Code homepage should end with a slash (url is #{f.homepage})."
+    if homepage =~ %r[^https?://code\.google\.com/p/[^/]+[^/]$]
+      problem "Google Code homepage should end with a slash (URL is #{homepage})."
     end
 
     urls = @specs.map(&:url)
@@ -295,11 +283,22 @@ class FormulaAuditor
 
       spec.patches.select(&:external?).each { |p| audit_patch(p) }
     end
+
+    if f.stable && f.devel
+      if f.devel.version < f.stable.version
+        problem "devel version #{f.devel.version} is older than stable version #{f.stable.version}"
+      elsif f.devel.version == f.stable.version
+        problem "stable and devel versions are identical"
+      end
+    end
   end
 
   def audit_patches
-    patches = Patch.normalize_legacy_patches(f.patches)
-    patches.grep(LegacyPatch).each { |p| audit_patch(p) }
+    legacy_patches = Patch.normalize_legacy_patches(f.patches).grep(LegacyPatch)
+    if legacy_patches.any?
+      problem "Use the patch DSL instead of defining a 'patches' method"
+      legacy_patches.each { |p| audit_patch(p) }
+    end
   end
 
   def audit_patch(patch)
@@ -416,7 +415,7 @@ class FormulaAuditor
     end
 
     if line =~ /if\s+ARGV\.include\?\s+'--(HEAD|devel)'/
-      problem "Use \"if ARGV.build_#{$1.downcase}?\" instead"
+      problem "Use \"if build.#{$1.downcase}?\" instead"
     end
 
     if line =~ /make && make/
@@ -481,13 +480,15 @@ class FormulaAuditor
     end
 
     if line =~ /ARGV\.(?!(debug\?|verbose\?|value[\(\s]))/
-      # Python formulae need ARGV for Requirements
-      problem "Use build instead of ARGV to check options",
-              :whitelist => %w{pygobject3 qscintilla2}
+      problem "Use build instead of ARGV to check options"
     end
 
     if line =~ /def options/
       problem "Use new-style option definitions"
+    end
+
+    if line =~ /def test$/
+      problem "Use new-style test definitions (test do)"
     end
 
     if line =~ /MACOS_VERSION/
@@ -545,21 +546,8 @@ class FormulaAuditor
     Symbol === dep ? dep.inspect : "'#{dep}'"
   end
 
-  def audit_check_output warning_and_description
-    return unless warning_and_description
-    warning, description = *warning_and_description
-    problem "#{warning}\n#{description}"
-  end
-
-  def audit_installed
-    audit_check_output(check_manpages)
-    audit_check_output(check_infopages)
-    audit_check_output(check_jars)
-    audit_check_output(check_non_libraries)
-    audit_check_output(check_non_executables(f.bin))
-    audit_check_output(check_generic_executables(f.bin))
-    audit_check_output(check_non_executables(f.sbin))
-    audit_check_output(check_generic_executables(f.sbin))
+  def audit_check_output(output)
+    problem(output) if output
   end
 
   def audit
@@ -570,14 +558,13 @@ class FormulaAuditor
     audit_conflicts
     audit_patches
     audit_text
-    text.split("\n").each_with_index { |line, lineno| audit_line(line, lineno) }
+    text.split("\n").each_with_index {|line, lineno| audit_line(line, lineno+1) }
     audit_installed
   end
 
   private
 
-  def problem p, options={}
-    return if options[:whitelist].to_a.include? f.name
+  def problem p
     @problems << p
   end
 end
@@ -642,6 +629,12 @@ class ResourceAuditor
 
   def audit_download_strategy
     return unless using
+
+    if using == :ssl3 || using == CurlSSL3DownloadStrategy
+      problem "The SSL3 download strategy is deprecated, please choose a different URL"
+    elsif using == CurlUnsafeDownloadStrategy
+      problem "#{using.name} is deprecated, please choose a different URL"
+    end
 
     url_strategy   = DownloadStrategyDetector.detect(url)
     using_strategy = DownloadStrategyDetector.detect('', using)

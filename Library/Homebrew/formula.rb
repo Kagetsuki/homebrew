@@ -3,7 +3,6 @@ require 'formula_lock'
 require 'formula_pin'
 require 'hardware'
 require 'bottles'
-require 'compilers'
 require 'build_environment'
 require 'build_options'
 require 'formulary'
@@ -12,11 +11,13 @@ require 'install_renamed'
 require 'pkg_version'
 
 class Formula
+  # :startdoc:
   include FileUtils
   include Utils::Inreplace
-  extend BuildEnvironmentDSL
+  extend Enumerable
+  # :stopdoc:
 
-  attr_reader :name, :path, :homepage, :build
+  attr_reader :name, :path
   attr_reader :stable, :devel, :head, :active_spec
   attr_reader :pkg_version, :revision
 
@@ -25,23 +26,21 @@ class Formula
   attr_reader :buildpath, :testpath
 
   attr_accessor :local_bottle_path
+  attr_accessor :build
 
-  # Homebrew determines the name
-  def initialize name='__UNKNOWN__', path=self.class.path(name)
+  def initialize(name, path, spec)
     @name = name
     @path = path
-    @homepage = self.class.homepage
     @revision = self.class.revision || 0
 
     set_spec :stable
     set_spec :devel
     set_spec :head
 
-    @active_spec = determine_active_spec
+    @active_spec = determine_active_spec(spec)
     validate_attributes :url, :name, :version
-    @build = determine_build_options
     @pkg_version = PkgVersion.new(version, revision)
-
+    @build = active_spec.build
     @pin = FormulaPin.new(self)
   end
 
@@ -53,16 +52,9 @@ class Formula
     end
   end
 
-  def determine_active_spec
-    case
-    when head && ARGV.build_head?   then head    # --HEAD
-    when devel && ARGV.build_devel? then devel   # --devel
-    when stable                     then stable
-    when devel                      then devel
-    when head                       then head    # head-only
-    else
-      raise FormulaSpecificationError, "formulae require at least a URL"
-    end
+  def determine_active_spec(requested)
+    spec = send(requested) || stable || devel || head
+    spec or raise FormulaSpecificationError, "formulae require at least a URL"
   end
 
   def validate_attributes(*attrs)
@@ -73,19 +65,16 @@ class Formula
     end
   end
 
-  def determine_build_options
-    build = active_spec.build
-    options.each { |opt, desc| build.add(opt, desc) }
-    build
-  end
-
   def bottle
     Bottle.new(self, active_spec.bottle_specification) if active_spec.bottled?
   end
 
+  def homepage
+    self.class.homepage
+  end
+
   def url;      active_spec.url;     end
   def version;  active_spec.version; end
-  def mirrors;  active_spec.mirrors; end
 
   def resource(name)
     active_spec.resource(name)
@@ -115,6 +104,22 @@ class Formula
     active_spec.patches
   end
 
+  def options
+    active_spec.options
+  end
+
+  def deprecated_options
+    active_spec.deprecated_options
+  end
+
+  def option_defined?(name)
+    active_spec.option_defined?(name)
+  end
+
+  def compiler_failures
+    active_spec.compiler_failures
+  end
+
   # if the dir is there, but it's empty we consider it not installed
   def installed?
     (dir = installed_prefix).directory? && dir.children.length > 0
@@ -138,6 +143,8 @@ class Formula
     require 'keg'
     Keg.new(installed_prefix).version
   end
+
+  # :startdoc:
 
   # The directory in the cellar that the formula is installed to.
   # This directory contains the formula's name and version.
@@ -218,30 +225,18 @@ class Formula
   # tell the user about any caveats regarding this package, return a string
   def caveats; nil end
 
-  # any e.g. configure options for this package
-  def options; [] end
-
+  # Deprecated
+  DATA = :DATA
   def patches; {} end
 
   # rarely, you don't want your library symlinked into the main prefix
   # see gettext.rb for an example
   def keg_only?
-    kor = self.class.keg_only_reason
-    not kor.nil? and kor.valid?
+    keg_only_reason && keg_only_reason.valid?
   end
 
   def keg_only_reason
     self.class.keg_only_reason
-  end
-
-  def fails_with? cc
-    cc = Compiler.new(cc) unless cc.is_a? Compiler
-    (self.class.cc_failures || []).any? do |failure|
-      # Major version check distinguishes between, e.g.,
-      # GCC 4.7.1 and GCC 4.8.2, where a comparison is meaningless
-      failure.compiler == cc.name && failure.major_version == cc.major_version &&
-        failure.version >= (cc.version || 0)
-    end
   end
 
   # sometimes the formula cleaner breaks things
@@ -255,6 +250,16 @@ class Formula
     self.class.skip_clean_paths.include? to_check
   end
 
+  def skip_cxxstdlib_check?
+    false
+  end
+
+  def require_universal_deps?
+    false
+  end
+
+  # :stopdoc:
+
   # yields self with current working directory set to the uncompressed tarball
   def brew
     validate_attributes :name, :version
@@ -265,11 +270,8 @@ class Formula
         # we allow formulae to do anything they want to the Ruby process
         # so load any deps before this point! And exit asap afterwards
         yield self
-      rescue RuntimeError, SystemCallError
-        %w(config.log CMakeCache.txt).each do |fn|
-          (HOMEBREW_LOGS/name).install(fn) if File.file?(fn)
-        end
-        raise
+      ensure
+        cp Dir["config.log", "CMakeCache.txt"], HOMEBREW_LOGS+name
       end
     end
   end
@@ -300,22 +302,30 @@ class Formula
   end
 
   def == other
-    instance_of?(other.class) && name == other.name
+    instance_of?(other.class) &&
+      name == other.name &&
+      active_spec == other.active_spec
   end
   alias_method :eql?, :==
 
   def hash
     name.hash
   end
-  def <=> b
-    name <=> b.name
+
+  def <=>(other)
+    return unless Formula === other
+    name <=> other.name
   end
+
   def to_s
     name
   end
+
   def inspect
-    name
+    "#<#{self.class.name}: #{path}>"
   end
+
+  # :startdoc:
 
   # Standard parameters for CMake builds.
   # Using Build Type "None" tells cmake to use our CFLAGS,etc. settings.
@@ -335,6 +345,8 @@ class Formula
     ]
   end
 
+  # :stopdoc:
+
   # Deprecated
   def python(options={}, &block)
     opoo 'Formula#python is deprecated and will go away shortly.'
@@ -343,10 +355,6 @@ class Formula
   end
   alias_method :python2, :python
   alias_method :python3, :python
-
-  def self.class_s name
-    Formulary.class_s(name)
-  end
 
   # an array of all Formula names
   def self.names
@@ -365,9 +373,6 @@ class Formula
       end
     end
   end
-  class << self
-    include Enumerable
-  end
 
   # An array of all installed formulae
   def self.installed
@@ -385,17 +390,8 @@ class Formula
     Dir["#{HOMEBREW_LIBRARY}/Aliases/*"].map{ |f| File.basename f }.sort
   end
 
-  def self.canonical_name name
-    Formulary.canonical_name(name)
-  end
-
   def self.[](name)
     Formulary.factory(name)
-  end
-
-  # deprecated
-  def self.factory name
-    Formulary.factory name
   end
 
   def tap?
@@ -422,7 +418,7 @@ class Formula
   end
 
   def env
-    @env ||= self.class.env
+    self.class.env
   end
 
   def conflicts
@@ -459,7 +455,7 @@ class Formula
       "caveats" => caveats
     }
 
-    hsh["options"] = build.map { |opt|
+    hsh["options"] = options.map { |opt|
       { "option" => opt.flag, "description" => opt.description }
     }
 
@@ -470,7 +466,7 @@ class Formula
 
         hsh["installed"] << {
           "version" => keg.version.to_s,
-          "used_options" => tab.used_options.map(&:flag),
+          "used_options" => tab.used_options.as_flags,
           "built_as_bottle" => tab.built_bottle,
           "poured_from_bottle" => tab.poured_from_bottle
         }
@@ -481,46 +477,47 @@ class Formula
 
   end
 
-  # For brew-fetch and others.
   def fetch
     active_spec.fetch
   end
 
-  # For FormulaInstaller.
   def verify_download_integrity fn
     active_spec.verify_download_integrity(fn)
   end
 
-  def test
-    require 'test/unit/assertions'
-    extend(Test::Unit::Assertions)
-    # Adding the used options allows us to use `build.with?` inside of tests
-    tab = Tab.for_name(name)
-    tab.used_options.each { |opt| build.args << opt unless build.has_opposite_of? opt }
-    ret = nil
+  def run_test
+    self.build = Tab.for_formula(self)
     mktemp do
       @testpath = Pathname.pwd
-      ret = instance_eval(&self.class.test)
-      @testpath = nil
+      test
     end
-    ret
+  ensure
+    @testpath = nil
   end
 
   def test_defined?
-    not self.class.instance_variable_get(:@test_defined).nil?
+    false
+  end
+
+  def test
+  end
+
+  def test_fixtures(file)
+    HOMEBREW_LIBRARY.join("Homebrew", "test", "fixtures", file)
   end
 
   protected
 
+  # :startdoc:
+
   # Pretty titles the command and buffers stdout/stderr
   # Throws if there's an error
   def system cmd, *args
-    rd, wr = IO.pipe
-
+    verbose = ARGV.verbose?
     # remove "boring" arguments so that the important ones are more likely to
     # be shown considering that we trim long ohai lines to the terminal width
     pretty_args = args.dup
-    if cmd == "./configure" and not ARGV.verbose?
+    if cmd == "./configure" and not verbose
       pretty_args.delete "--disable-dependency-tracking"
       pretty_args.delete "--disable-debug"
     end
@@ -532,35 +529,30 @@ class Formula
     logfn = "#{logd}/%02d.%s" % [@exec_count, File.basename(cmd).split(' ').first]
     mkdir_p(logd)
 
-    pid = fork do
-      ENV['HOMEBREW_CC_LOG_PATH'] = logfn
+    log = File.open(logfn, "w")
+    begin
+      log.puts Time.now, "", cmd, args, ""
+      log.flush
 
-      # TODO system "xcodebuild" is deprecated, this should be removed soon.
-      if cmd.to_s.start_with? "xcodebuild"
-        ENV.remove_cc_etc
-      end
+      if verbose
+        rd, wr = IO.pipe
+        begin
+          pid = fork do
+            rd.close
+            log.close
+            exec_cmd(cmd, args, wr, logfn)
+          end
+          wr.close
 
-      # Turn on argument filtering in the superenv compiler wrapper.
-      # We should probably have a better mechanism for this than adding
-      # special cases to this method.
-      if cmd == "python" && %w[setup.py build.py].include?(args.first)
-        ENV.refurbish_args
-      end
-
-      rd.close
-      $stdout.reopen wr
-      $stderr.reopen wr
-      args.collect!{|arg| arg.to_s}
-      exec(cmd, *args) rescue nil
-      puts "Failed to execute: #{cmd}"
-      exit! 1 # never gets here unless exec threw or failed
-    end
-    wr.close
-
-    File.open(logfn, 'w') do |f|
-      while buf = rd.gets
-        f.puts buf
-        puts buf if ARGV.verbose?
+          while buf = rd.gets
+            log.puts buf
+            puts buf
+          end
+        ensure
+          rd.close
+        end
+      else
+        pid = fork { exec_cmd(cmd, args, log, logfn) }
       end
 
       Process.wait(pid)
@@ -568,19 +560,45 @@ class Formula
       $stdout.flush
 
       unless $?.success?
-        f.flush
-        Kernel.system "/usr/bin/tail", "-n", "5", logfn unless ARGV.verbose?
-        f.puts
+        log.flush
+        Kernel.system "/usr/bin/tail", "-n", "5", logfn unless verbose
+        log.puts
         require 'cmd/config'
-        Homebrew.write_build_config(f)
-        raise BuildError.new(self, cmd, args)
+        Homebrew.dump_build_config(log)
+        raise BuildError.new(self, cmd, args, ENV.to_hash)
       end
+    ensure
+      log.close
     end
-  ensure
-    rd.close unless rd.closed?
   end
 
+  # :stopdoc:
+
   private
+
+  def exec_cmd(cmd, args, out, logfn)
+    ENV['HOMEBREW_CC_LOG_PATH'] = logfn
+
+    # TODO system "xcodebuild" is deprecated, this should be removed soon.
+    if cmd.to_s.start_with? "xcodebuild"
+      ENV.remove_cc_etc
+    end
+
+    # Turn on argument filtering in the superenv compiler wrapper.
+    # We should probably have a better mechanism for this than adding
+    # special cases to this method.
+    if cmd == "python" && %w[setup.py build.py].include?(args.first)
+      ENV.refurbish_args
+    end
+
+    $stdout.reopen(out)
+    $stderr.reopen(out)
+    out.close
+    args.collect!{|arg| arg.to_s}
+    exec(cmd, *args) rescue nil
+    puts "Failed to execute: #{cmd}"
+    exit! 1 # never gets here unless exec threw or failed
+  end
 
   def stage
     active_spec.stage do
@@ -593,6 +611,8 @@ class Formula
   def patch
     active_spec.add_legacy_patches(patches)
     return if patchlist.empty?
+
+    active_spec.patches.grep(DATAPatch) { |p| p.path = path }
 
     active_spec.patches.select(&:external?).each do |patch|
       patch.verify_download_integrity(patch.fetch)
@@ -607,14 +627,25 @@ class Formula
     when :brew
       raise "You cannot override Formula#brew in class #{name}"
     when :test
-      @test_defined = true
+      define_method(:test_defined?) { true }
+    when :options
+      instance = allocate
+
+      specs.each do |spec|
+        instance.options.each do |opt, desc|
+          spec.option(opt[/^--(.+)$/, 1], desc)
+        end
+      end
+
+      remove_method(:options)
     end
   end
 
   # The methods below define the formula DSL.
   class << self
+    include BuildEnvironmentDSL
 
-    attr_reader :keg_only_reason, :cc_failures
+    attr_reader :keg_only_reason
     attr_rw :homepage, :plist_startup, :plist_manual, :revision
 
     def specs
@@ -669,22 +700,30 @@ class Formula
     end
 
     # Define a named resource using a SoftwareSpec style block
-    def resource name, &block
+    def resource name, klass=Resource, &block
       specs.each do |spec|
-        spec.resource(name, &block) unless spec.resource?(name)
+        spec.resource(name, klass, &block) unless spec.resource_defined?(name)
       end
+    end
+
+    def go_resource name, &block
+      resource name, Resource::Go, &block
     end
 
     def depends_on dep
       specs.each { |spec| spec.depends_on(dep) }
     end
 
-    def option name, description=nil
+    def option name, description=""
       specs.each { |spec| spec.option(name, description) }
     end
 
-    def patch strip=:p1, io=nil, &block
-      specs.each { |spec| spec.patch(strip, io, &block) }
+    def deprecated_option hash
+      specs.each { |spec| spec.deprecated_option(hash) }
+    end
+
+    def patch strip=:p1, src=nil, &block
+      specs.each { |spec| spec.patch(strip, src, &block) }
     end
 
     def plist_options options
@@ -711,20 +750,13 @@ class Formula
       @skip_clean_paths ||= Set.new
     end
 
-    def keg_only reason, explanation=nil
-      @keg_only_reason = KegOnlyReason.new(reason, explanation.to_s.chomp)
+    def keg_only reason, explanation=""
+      @keg_only_reason = KegOnlyReason.new(reason, explanation)
     end
 
-    # Flag for marking whether this formula needs C++ standard library
-    # compatibility check
-    def cxxstdlib
-      @cxxstdlib ||= Set.new
-    end
-
-    # Explicitly request changing C++ standard library compatibility check
-    # settings. Use with caution!
+    # Pass :skip to this method to disable post-install stdlib checking
     def cxxstdlib_check check_type
-      cxxstdlib << check_type
+      define_method(:skip_cxxstdlib_check?) { true } if check_type == :skip
     end
 
     # For Apple compilers, this should be in the format:
@@ -755,25 +787,16 @@ class Formula
     #   version '4.8.1'
     # end
     def fails_with compiler, &block
-      @cc_failures ||= Set.new
-      @cc_failures << CompilerFailure.new(compiler, &block)
+      specs.each { |spec| spec.fails_with(compiler, &block) }
     end
 
     def needs *standards
-      @cc_failures ||= Set.new
-      standards.each do |standard|
-        @cc_failures.merge CompilerFailure.for_standard standard
-      end
-    end
-
-    def require_universal_deps
-      specs.each { |spec| spec.build.universal = true }
+      specs.each { |spec| spec.needs(*standards) }
     end
 
     def test &block
-      return @test unless block_given?
-      @test_defined = true
-      @test = block
+      define_method(:test_defined?) { true }
+      define_method(:test, &block)
     end
   end
 end

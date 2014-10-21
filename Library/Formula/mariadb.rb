@@ -2,13 +2,13 @@ require 'formula'
 
 class Mariadb < Formula
   homepage 'http://mariadb.org/'
-  url 'http://ftp.osuosl.org/pub/mariadb/mariadb-10.0.11/source/mariadb-10.0.11.tar.gz'
-  sha1 'd596a2af184a125d833d507f411a3f8cf4cd3134'
+  url "http://ftp.osuosl.org/pub/mariadb/mariadb-10.0.14/source/mariadb-10.0.14.tar.gz"
+  sha1 "46dc0b66567ff9d4e3a32d9d4b3c9ef250a6fc9e"
 
   bottle do
-    sha1 "c82fbe012156d56a5accdb9612d2e058b79ef1db" => :mavericks
-    sha1 "358893e24183fab22a6637d68a2e2c8d14b51351" => :mountain_lion
-    sha1 "9297a50dc9e3ffa8cc405312120d12a6d902799a" => :lion
+    sha1 "afcd264148f8ab83ff44db884511f26f8cc3249d" => :mavericks
+    sha1 "f93ebfd2619060aaa9f92bb63236d3065efbfcce" => :mountain_lion
+    sha1 "b7e51a046b0c27770aa93c90d0216827742b52c5" => :lion
   end
 
   depends_on 'cmake' => :build
@@ -28,12 +28,27 @@ class Mariadb < Formula
   conflicts_with 'mysql-connector-c',
     :because => 'both install MySQL client libraries'
 
+  # upstream fix for compile error, to be removed with 1.0.15
+  # https://mariadb.atlassian.net/browse/MDEV-6802
+  patch :p0 do
+    url "https://bazaar.launchpad.net/~maria-captains/maria/10.0-connect/diff/4424"
+    sha1 "06dee7edd4a37a072454a7e0218886d33bffdceb"
+  end
+
   def install
     # Don't hard-code the libtool path. See:
     # https://github.com/Homebrew/homebrew/issues/20185
     inreplace "cmake/libutils.cmake",
       "COMMAND /usr/bin/libtool -static -o ${TARGET_LOCATION}",
       "COMMAND libtool -static -o ${TARGET_LOCATION}"
+
+    # Set basedir and ldata so that mysql_install_db can find the server
+    # without needing an explicit path to be set. This can still
+    # be overridden by calling --basedir= when calling.
+    inreplace "scripts/mysql_install_db.sh" do |s|
+      s.change_make_var! "basedir", "\"#{prefix}\""
+      s.change_make_var! "ldata", "\"#{var}/mysql\""
+    end
 
     # Build without compiler or CPU specific optimization flags to facilitate
     # compilation of gems and other software that queries `mysql-config`.
@@ -56,6 +71,7 @@ class Mariadb < Formula
       -DDEFAULT_COLLATION=utf8_general_ci
       -DINSTALL_SYSCONFDIR=#{etc}
       -DCOMPILATION_COMMENT=Homebrew
+      -DWITHOUT_TOKUDB=1
     ]
 
     args << "-DWITH_UNIT_TESTS=OFF" if build.without? 'tests'
@@ -95,26 +111,24 @@ class Mariadb < Formula
       s.gsub!("!includedir /etc/my.cnf.d", "!includedir #{etc}/my.cnf.d")
     end
 
-    unless build.include? 'client-only'
-      # Don't create databases inside of the prefix!
-      # See: https://github.com/Homebrew/homebrew/issues/4975
-      rm_rf prefix+'data'
+    # Don't create databases inside of the prefix!
+    # See: https://github.com/Homebrew/homebrew/issues/4975
+    rm_rf prefix+'data'
 
-      (prefix+'mysql-test').rmtree if build.without? 'tests' # save 121MB!
-      (prefix+'sql-bench').rmtree if build.without? 'bench'
+    (prefix+'mysql-test').rmtree if build.without? 'tests' # save 121MB!
+    (prefix+'sql-bench').rmtree if build.without? 'bench'
 
-      # Link the setup script into bin
-      bin.install_symlink prefix/"scripts/mysql_install_db"
+    # Link the setup script into bin
+    bin.install_symlink prefix/"scripts/mysql_install_db"
 
-      # Fix up the control script and link into bin
-      inreplace "#{prefix}/support-files/mysql.server" do |s|
-        s.gsub!(/^(PATH=".*)(")/, "\\1:#{HOMEBREW_PREFIX}/bin\\2")
-        # pidof can be replaced with pgrep from proctools on Mountain Lion
-        s.gsub!(/pidof/, 'pgrep') if MacOS.version >= :mountain_lion
-      end
-
-      bin.install_symlink prefix/"support-files/mysql.server"
+    # Fix up the control script and link into bin
+    inreplace "#{prefix}/support-files/mysql.server" do |s|
+      s.gsub!(/^(PATH=".*)(")/, "\\1:#{HOMEBREW_PREFIX}/bin\\2")
+      # pidof can be replaced with pgrep from proctools on Mountain Lion
+      s.gsub!(/pidof/, 'pgrep') if MacOS.version >= :mountain_lion
     end
+
+    bin.install_symlink prefix/"support-files/mysql.server"
   end
 
   def post_install

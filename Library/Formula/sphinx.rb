@@ -2,27 +2,29 @@ require 'formula'
 
 class Sphinx < Formula
   homepage 'http://www.sphinxsearch.com'
-  url 'http://sphinxsearch.com/files/sphinx-2.1.8-release.tar.gz'
-  sha1 'c69e24ed1fad907b893dc61b0a52db30b6c85ad2'
+  url 'http://sphinxsearch.com/files/sphinx-2.2.5-release.tar.gz'
+  sha1 '27e1a37fdeff12b866b33d3bb5602894af10bb5e'
 
   head 'http://sphinxsearch.googlecode.com/svn/trunk/'
 
-  devel do
-    url 'http://sphinxsearch.com/files/sphinx-2.2.2-beta.tar.gz'
-    sha1 '6a63111c5f2fcd93915d114845f2375b031ff9da'
+  bottle do
+    sha1 "39090ca7d66167464aed584caf5ec21dcd234fc3" => :mavericks
+    sha1 "95cc0d4a21c091a91e50c3ce4000b2c7196c71bc" => :mountain_lion
+    sha1 "57564d0b2d3e788f9b5e78fad94cac39d9d991e0" => :lion
   end
 
   option 'mysql', 'Force compiling against MySQL'
   option 'pgsql', 'Force compiling against PostgreSQL'
   option 'id64',  'Force compiling with 64-bit ID support'
 
+  depends_on "re2" => :optional
   depends_on :mysql if build.include? 'mysql'
   depends_on :postgresql if build.include? 'pgsql'
 
   # http://snowball.tartarus.org/
   resource 'stemmer' do
     url 'http://snowball.tartarus.org/dist/libstemmer_c.tgz'
-    sha1 'bbe1ba5bbebb146575a575b8ca3342aa3b91bf93'
+    sha1 '9b0f120a68a3c688b2f5a8d0f681620465c29d38'
   end
 
   fails_with :llvm do
@@ -44,6 +46,7 @@ class Sphinx < Formula
               --with-libstemmer]
 
     args << "--enable-id64" if build.include? 'id64'
+    args << "--with-re2" if build.with? 're2'
 
     %w{mysql pgsql}.each do |db|
       if build.include? db

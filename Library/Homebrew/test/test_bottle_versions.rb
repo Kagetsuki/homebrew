@@ -1,7 +1,7 @@
 require 'testing_env'
 require 'bottle_version'
 
-class BottleVersionParsingTests < Test::Unit::TestCase
+class BottleVersionParsingTests < Homebrew::TestCase
   def assert_version_detected expected, path
     assert_equal expected, BottleVersion.parse(path).to_s
   end
@@ -54,5 +54,10 @@ class BottleVersionParsingTests < Test::Unit::TestCase
   def test_erlang_style
     assert_version_detected 'R16B03-1',
       'erlang-R16B03-1.mavericks.bottle.2.tar.gz'
+  end
+
+  def test_libpano_style
+    assert_version_detected '13-2.9.19',
+      'libpano-13-2.9.19_1.yosemite.bottle.tar.gz'
   end
 end

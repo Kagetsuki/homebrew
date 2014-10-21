@@ -1,10 +1,10 @@
 require 'formula'
 
 class Jetty < Formula
-  homepage 'http://www.eclipse.org/jetty/'
-  url 'http://eclipse.org/downloads/download.php?file=/jetty/9.1.5.v20140505/dist/jetty-distribution-9.1.5.v20140505.tar.gz&r=1'
-  version '9.1.5'
-  sha1 '80ea2066dab35405f97d76299714f8e6e584cb21'
+  homepage "http://www.eclipse.org/jetty/"
+  url "http://eclipse.org/downloads/download.php?file=/jetty/9.2.3.v20140905/dist/jetty-distribution-9.2.3.v20140905.tar.gz&r=1"
+  version "9.2.3"
+  sha1 "7ad9d6678e794aa483fe5b4517f9aa79caf8e8db"
 
   def install
     libexec.install Dir['*']

@@ -1,34 +1,35 @@
-require 'formula'
+require "formula"
 
 class Ruby < Formula
-  homepage 'https://www.ruby-lang.org/'
-  url "http://cache.ruby-lang.org/pub/ruby/2.1/ruby-2.1.2.tar.bz2"
-  sha256 "6948b02570cdfb89a8313675d4aa665405900e27423db408401473f30fc6e901"
+  homepage "https://www.ruby-lang.org/"
+  url "http://cache.ruby-lang.org/pub/ruby/2.1/ruby-2.1.3.tar.bz2"
+  sha256 "36ce72f84ae4129f6cc66e33077a79d87b018ea7bf1dbc3d353604bf006f76d6"
+  revision 1
 
   bottle do
-    sha1 "9c7a61fa34c47d0c48a23bf28a0d4c9a3f31b273" => :mavericks
-    sha1 "e9e8b27b822b331083f268ac78688e6195d5334a" => :mountain_lion
-    sha1 "ccd62b5dd83229a8dfaf57abf8c1ec131b50b17e" => :lion
+    sha1 "26a2a1a48338c5bd44cb6dc4a48d9904bc1fe69c" => :mavericks
+    sha1 "d930fbbb2d96b754e4d200448ab97c498fcd19d2" => :mountain_lion
+    sha1 "4c574b9b8271b67ab9d84a9acb9391809c456c74" => :lion
   end
 
   head do
-    url 'http://svn.ruby-lang.org/repos/ruby/trunk/'
+    url "http://svn.ruby-lang.org/repos/ruby/trunk/"
     depends_on "autoconf" => :build
   end
 
   option :universal
-  option 'with-suffix', 'Suffix commands with "21"'
-  option 'with-doc', 'Install documentation'
-  option 'with-tcltk', 'Install with Tcl/Tk support'
+  option "with-suffix", "Suffix commands with '21'"
+  option "with-doc", "Install documentation"
+  option "with-tcltk", "Install with Tcl/Tk support"
 
-  depends_on 'pkg-config' => :build
-  depends_on 'readline' => :recommended
-  depends_on 'gdbm' => :optional
-  depends_on 'gmp' => :optional
-  depends_on 'libffi' => :optional
-  depends_on 'libyaml'
-  depends_on 'openssl'
-  depends_on :x11 if build.with? 'tcltk'
+  depends_on "pkg-config" => :build
+  depends_on "readline" => :recommended
+  depends_on "gdbm" => :optional
+  depends_on "gmp" => :optional
+  depends_on "libffi" => :optional
+  depends_on "libyaml"
+  depends_on "openssl"
+  depends_on :x11 if build.with? "tcltk"
 
   fails_with :llvm do
     build 2326
@@ -37,13 +38,25 @@ class Ruby < Formula
   def install
     system "autoconf" if build.head?
 
-    args = %W[--prefix=#{prefix} --enable-shared --disable-silent-rules]
+    args = %W[
+      --prefix=#{prefix} --enable-shared --disable-silent-rules
+      --with-sitedir=#{HOMEBREW_PREFIX}/lib/ruby/site_ruby
+      --with-vendordir=#{HOMEBREW_PREFIX}/lib/ruby/vendor_ruby
+    ]
+
+    if build.universal?
+      ENV.universal_binary
+      args << "--with-arch=#{Hardware::CPU.universal_archs.join(",")}"
+    end
+
     args << "--program-suffix=21" if build.with? "suffix"
-    args << "--with-arch=#{Hardware::CPU.universal_archs.join(',')}" if build.universal?
     args << "--with-out-ext=tk" if build.without? "tcltk"
     args << "--disable-install-doc" if build.without? "doc"
     args << "--disable-dtrace" unless MacOS::CLT.installed?
     args << "--without-gmp" if build.without? "gmp"
+
+    # Reported upstream: https://bugs.ruby-lang.org/issues/10272
+    args << "--with-setjmp-type=setjmp" if MacOS.version == :lion
 
     paths = [
       Formula["libyaml"].opt_prefix,
@@ -58,35 +71,79 @@ class Ruby < Formula
 
     system "./configure", *args
     system "make"
-    system "make install"
+    system "make", "install"
+
+    # Customize rubygems to look/install in the global gem directory
+    # instead of in the Cellar, making gems last across reinstalls
+    (lib/"ruby/#{abi_version}/rubygems/defaults/operating_system.rb").write rubygems_config
   end
 
-  def post_install
-    # Put gem, site and vendor folders in the HOMEBREW_PREFIX
-    ruby_lib = HOMEBREW_PREFIX/"lib/ruby"
-    (ruby_lib/'site_ruby').mkpath
-    (ruby_lib/'vendor_ruby').mkpath
-    (ruby_lib/'gems').mkpath
-
-    rm_rf Dir["#{lib}/ruby/{site_ruby,vendor_ruby,gems}"]
-    (lib/'ruby').install_symlink ruby_lib/'site_ruby',
-                                 ruby_lib/'vendor_ruby',
-                                 ruby_lib/'gems'
+  def abi_version
+    "2.1.0"
   end
 
-  def caveats; <<-EOS.undent
-    By default, gem installed executables will be placed into:
-      #{opt_bin}
+  def rubygems_config; <<-EOS.undent
+    module Gem
+      class << self
+        alias :old_default_dir :default_dir
+        alias :old_default_path :default_path
+        alias :old_default_bindir :default_bindir
+      end
 
-    You may want to add this to your PATH. After upgrades, you can run
-      gem pristine --all --only-executables
+      def self.default_dir
+        path = [
+          "#{HOMEBREW_PREFIX}",
+          "lib",
+          "ruby",
+          "gems",
+          "#{abi_version}"
+        ]
 
-    to restore binstubs for installed gems.
+        @default_dir ||= File.join(*path)
+      end
+
+      def self.private_dir
+        path = if defined? RUBY_FRAMEWORK_VERSION then
+                 [
+                   File.dirname(RbConfig::CONFIG['sitedir']),
+                   'Gems',
+                   RbConfig::CONFIG['ruby_version']
+                 ]
+               elsif RbConfig::CONFIG['rubylibprefix'] then
+                 [
+                  RbConfig::CONFIG['rubylibprefix'],
+                  'gems',
+                  RbConfig::CONFIG['ruby_version']
+                 ]
+               else
+                 [
+                   RbConfig::CONFIG['libdir'],
+                   ruby_engine,
+                   'gems',
+                   RbConfig::CONFIG['ruby_version']
+                 ]
+               end
+
+        @private_dir ||= File.join(*path)
+      end
+
+      def self.default_path
+        if Gem.user_home && File.exist?(Gem.user_home)
+          [user_dir, default_dir, private_dir]
+        else
+          [default_dir, private_dir]
+        end
+      end
+
+      def self.default_bindir
+        "#{HOMEBREW_PREFIX}/bin"
+      end
+    end
     EOS
   end
 
   test do
-    output = `#{bin}/ruby -e 'puts "hello"'`
+    output = `#{bin}/ruby -e "puts 'hello'"`
     assert_equal "hello\n", output
     assert_equal 0, $?.exitstatus
   end

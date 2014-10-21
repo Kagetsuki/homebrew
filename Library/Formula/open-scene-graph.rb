@@ -2,8 +2,30 @@ require 'formula'
 
 class OpenSceneGraph < Formula
   homepage 'http://www.openscenegraph.org/projects/osg'
-  url 'http://trac.openscenegraph.org/downloads/developer_releases/OpenSceneGraph-3.2.0.zip'
-  sha1 'c20891862b5876983d180fc4a3d3cfb2b4a3375c'
+
+  stable do
+    url "http://trac.openscenegraph.org/downloads/developer_releases/OpenSceneGraph-3.2.0.zip"
+  bottle do
+    sha1 "39ebd1c9cb19056e150b7087586e1e63a9546288" => :mavericks
+    sha1 "166b932d7d317cd32b1da89353bb3e03b4b13880" => :mountain_lion
+    sha1 "16055dc346e3a892c1083e08c40d32d37c2e10f0" => :lion
+  end
+
+    sha1 "c20891862b5876983d180fc4a3d3cfb2b4a3375c"
+
+    # Build fixes for clang/c++11
+    patch do
+      url "https://github.com/openscenegraph/osg/commit/f71491786ac2d22ef16f9f5ed31de0f6666c6600.diff"
+      sha1 "d96fe3dc1a01c8ad096433ef07f02803c2bf9206"
+    end
+
+    # Fix freetype detection
+    patch do
+      url "https://github.com/openscenegraph/osg/commit/3063b45aba74a0cfc693d46866084cde0d8959e2.diff"
+      sha1 "8a2a0e8384a30e3adb2820786f91adb52ba69cd9"
+    end
+  end
+  revision 1
 
   head 'http://www.openscenegraph.org/svn/osg/OpenSceneGraph/trunk/'
 
@@ -15,6 +37,7 @@ class OpenSceneGraph < Formula
   depends_on 'jpeg'
   depends_on 'wget'
   depends_on 'gtkglext'
+  depends_on 'freetype'
   depends_on 'gdal' => :optional
   depends_on 'jasper' => :optional
   depends_on 'openexr' => :optional
@@ -51,11 +74,11 @@ class OpenSceneGraph < Formula
       args << "-DOSG_DEFAULT_IMAGE_PLUGIN_FOR_OSX=imageio"
       args << "-DOSG_WINDOWING_SYSTEM=Cocoa"
     else
-      args << "-DCMAKE_OSX_ARCHITECTURES=i386"
+      args << "-DCMAKE_OSX_ARCHITECTURES=#{Hardware::CPU.arch_32_bit}"
     end
 
-    if Formula["collada-dom"].installed?
-      args << "-DCOLLADA_INCLUDE_DIR=#{HOMEBREW_PREFIX}/include/collada-dom"
+    if build.with? "collada-dom"
+      args << "-DCOLLADA_INCLUDE_DIR=#{Formula["collada-dom"].opt_include}/collada-dom"
     end
 
     if build.with? 'qt5'

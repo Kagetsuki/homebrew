@@ -11,7 +11,7 @@ class Version
     end
 
     def inspect
-      "#<#{self.class} #{value.inspect}>"
+      "#<#{self.class.name} #{value.inspect}>"
     end
 
     def to_s
@@ -36,7 +36,7 @@ class Version
     end
 
     def inspect
-      "#<#{self.class}>"
+      "#<#{self.class.name}>"
     end
   end
 
@@ -80,7 +80,7 @@ class Version
 
   class CompositeToken < StringToken
     def rev
-      value[/([0-9]+)/, 1] || "0"
+      value[/[0-9]+/].to_i
     end
   end
 

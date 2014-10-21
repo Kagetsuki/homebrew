@@ -5,6 +5,14 @@ class Libsass < Formula
   url 'https://github.com/hcatlin/libsass/archive/v1.0.1.tar.gz'
   sha1 '9524e028bc8ebe84e36895269d07ecc7db496c7c'
 
+  bottle do
+    cellar :any
+    revision 1
+    sha1 "16a59fa3df578bee204a420c2be10475fea032e8" => :yosemite
+    sha1 "c046de601b8c6f1d6f680b28a0882b6db7157d0a" => :mavericks
+    sha1 "d523235bd716776d63fd08e5a1982fbf4b26daa3" => :mountain_lion
+  end
+
   depends_on "autoconf" => :build
   depends_on "automake" => :build
   depends_on "libtool" => :build

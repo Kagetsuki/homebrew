@@ -1,7 +1,7 @@
 require 'cmd/install'
 require 'cmd/outdated'
 
-module Homebrew extend self
+module Homebrew
   def upgrade
     Homebrew.perform_preinstall_checks
 
@@ -11,10 +11,10 @@ module Homebrew extend self
     else
       outdated = ARGV.formulae.select do |f|
         if f.installed?
-          onoe "#{f}-#{f.installed_version} already installed"
+          onoe "#{f.name}-#{f.installed_version} already installed"
           false
         elsif not f.rack.directory? or f.rack.subdirs.empty?
-          onoe "#{f} not installed"
+          onoe "#{f.name} not installed"
           false
         else
           true
@@ -49,9 +49,11 @@ module Homebrew extend self
 
   def upgrade_formula f
     outdated_keg = Keg.new(f.linked_keg.resolved_path) if f.linked_keg.directory?
+    tab = Tab.for_formula(f)
 
     fi = FormulaInstaller.new(f)
-    fi.options             = Tab.for_formula(f).used_options
+    fi.options             = tab.used_options
+    fi.build_bottle        = ARGV.build_bottle? || tab.build_bottle?
     fi.build_from_source   = ARGV.build_from_source?
     fi.verbose             = ARGV.verbose?
     fi.verbose           &&= :quieter if ARGV.quieter?

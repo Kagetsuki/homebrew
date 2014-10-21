@@ -2,12 +2,18 @@ require "formula"
 
 class SwiProlog < Formula
   homepage "http://www.swi-prolog.org/"
-  url "http://www.swi-prolog.org/download/stable/src/pl-6.6.5.tar.gz"
-  sha1 "ae86b29f1b78a4c1530990a761fefb0c86ba57f2"
+  url "http://www.swi-prolog.org/download/stable/src/pl-6.6.6.tar.gz"
+  sha1 "38cc6772a48fd412f50fc06e24e6e4673eb71d3b"
+
+  bottle do
+    sha1 "6003d555c8b45abf55773637d556f8bee28ca4dd" => :mavericks
+    sha1 "b790e5871436682e50ee8c2048ceaa4d09f25732" => :mountain_lion
+    sha1 "bba383cb95cfc1b79a7b931174f879d4f83c3dcb" => :lion
+  end
 
   devel do
-    url "http://www.swi-prolog.org/download/devel/src/pl-7.1.15.tar.gz"
-    sha1 "3e15af545f3d528b2ad7d9eac0b833fd86880dd8"
+    url "http://www.swi-prolog.org/download/devel/src/pl-7.1.23.tar.gz"
+    sha1 "eb2b4cb49acf8574e25bdc0bcc5686adf07e8f9f"
   end
 
   head do
@@ -20,12 +26,12 @@ class SwiProlog < Formula
   option "with-jpl", "Enable JPL (Java Prolog Bridge)"
   option "with-xpce", "Enable XPCE (Prolog Native GUI Library)"
 
+  depends_on "pkg-config" => :build
   depends_on "readline"
   depends_on "gmp"
   depends_on "libarchive" => :optional
 
   if build.with? "xpce"
-    depends_on "pkg-config" => :build
     depends_on :x11
     depends_on "jpeg"
   end

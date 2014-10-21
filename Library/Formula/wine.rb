@@ -24,23 +24,30 @@ class Wine < Formula
   end
 
   devel do
-    url "https://downloads.sourceforge.net/project/wine/Source/wine-1.7.19.tar.bz2"
-    sha256 "c5ea9b00c9029ecf47a25881b284d8ea02079dfbabc22aa789d6d07e38b32ff2"
+    url "https://downloads.sourceforge.net/project/wine/Source/wine-1.7.29.tar.bz2"
+    sha256 "ae48190d35533197811eeabed989ed9fd3201c44af917107f35ec0bf75b8de62"
 
-    # http://bugs.winehq.org/show_bug.cgi?id=34166
+    depends_on "samba" => :optional
+    depends_on "gnutls"
+
+    # Patch to fix screen-flickering issues. Still relevant on 1.7.23.
+    # https://bugs.winehq.org/show_bug.cgi?id=34166
     patch do
-      url "http://bugs.winehq.org/attachment.cgi?id=47639"
+      url "https://bugs.winehq.org/attachment.cgi?id=47639"
       sha1 "c195f4b9c0af450c7dc3f396e8661ea5248f2b01"
     end
   end
 
-  head "git://source.winehq.org/git/wine.git"
-
-  env :std
+  head do
+    url "git://source.winehq.org/git/wine.git"
+    depends_on "samba" => :optional
+  end
 
   # note that all wine dependencies should declare a --universal option in their formula,
   # otherwise homebrew will not notice that they are not built universal
-  require_universal_deps
+  def require_universal_deps?
+    true
+  end
 
   # Wine will build both the Mac and the X11 driver by default, and you can switch
   # between them. But if you really want to build without X11, you can.
@@ -72,8 +79,8 @@ class Wine < Formula
   end
 
   fails_with :clang do
-    build 421
-    cause 'error: invalid operand for instruction lretw'
+    build 425
+    cause "Clang prior to Xcode 5 miscompiles some parts of wine"
   end
 
   # These libraries are not specified as dependencies, or not built as 32-bit:
@@ -97,23 +104,13 @@ class Wine < Formula
   end
 
   def install
-    # Build 32-bit; Wine doesn't support 64-bit host builds on OS X.
-    build32 = "-arch i386 -m32"
+    ENV.m32 # Build 32-bit; Wine doesn't support 64-bit host builds on OS X.
 
-    ENV.append "CFLAGS", build32
-    ENV.append "LDFLAGS", build32
-
-    # The clang that comes with Xcode 5 no longer miscompiles wine. Tested with 1.7.3.
-    if ENV.compiler == :clang and MacOS.clang_build_version < 500
-      opoo <<-EOS.undent
-        Clang currently miscompiles some parts of Wine.
-        If you have GCC, you can get a more stable build with:
-          brew install wine --cc=gcc-4.2 # or 4.7, 4.8, etc.
-      EOS
-    end
+    # Help configure find libxml2 in an XCode only (no CLT) installation.
+    ENV.libxml2
 
     args = ["--prefix=#{prefix}"]
-    args << "--disable-win16" if MacOS.version <= :leopard or ENV.compiler == :clang
+    args << "--disable-win16" if MacOS.version <= :leopard
 
     # 64-bit builds of mpg123 are incompatible with 32-bit builds of Wine
     args << "--without-mpg123" if Hardware.is_64_bit?
@@ -122,11 +119,25 @@ class Wine < Formula
 
     system "./configure", *args
 
-    unless ENV.compiler == :clang or ENV.compiler == :llvm
-      # The Mac driver uses blocks and must be compiled with clang even if the rest of
-      # Wine is built with gcc. This must be done after configure.
-      system 'make', 'dlls/winemac.drv/Makefile'
-      inreplace 'dlls/winemac.drv/Makefile', /^CC\s*=\s*[^\s]+/, "CC = clang"
+    # The Mac driver uses blocks and must be compiled with an Apple compiler
+    # even if the rest of Wine is built with A GNU compiler.
+    unless ENV.compiler == :clang || ENV.compiler == :llvm || ENV.compiler == :gcc
+      system "make", "dlls/winemac.drv/Makefile"
+      inreplace "dlls/winemac.drv/Makefile" do |s|
+        # We need to use the real compiler, not the superenv shim, which will exec the
+        # configured compiler no matter what name is used to invoke it.
+        cc, cxx = s.get_make_var("CC"), s.get_make_var("CXX")
+        s.change_make_var! "CC", cc.sub(ENV.cc, "xcrun clang") if cc
+        s.change_make_var! "CXX", cc.sub(ENV.cxx, "xcrun clang++") if cxx
+
+        # Emulate some things that superenv would normally handle for us
+        # We're configured to use GNU GCC, so remote an unsupported flag
+        s.gsub! "-gstabs+", ""
+        # Pass the sysroot to support Xcode-only systems
+        cflags  = s.get_make_var("CFLAGS")
+        cflags += " --sysroot=#{MacOS.sdk_path}"
+        s.change_make_var! "CFLAGS", cflags
+      end
     end
 
     system "make install"

@@ -2,31 +2,33 @@ require 'formula'
 
 class Git < Formula
   homepage "http://git-scm.com"
-  url "https://www.kernel.org/pub/software/scm/git/git-2.0.0.tar.gz"
-  sha1 "d0a7da8b46bc5c63ca68b0eba189dd31f615437c"
+  url "https://www.kernel.org/pub/software/scm/git/git-2.1.2.tar.gz"
+  sha1 "1385edbc9aa77b6e0971f52f75ba4f2ff35c1aa2"
 
   head "https://github.com/git/git.git", :shallow => false
 
   bottle do
-    sha1 "fd9e260685da9033ab3df7d17fbd247ca0735a5f" => :mavericks
-    sha1 "4ca39e18a7e0353d95ac96fad95a8722ada85652" => :mountain_lion
-    sha1 "2daba8156c876d19cf5a766ff6ff2b03b10802f2" => :lion
+    sha1 "3b632bbeccf3a8a9a2b4223d710034657e7d7ea7" => :yosemite
+    sha1 "022c2ffe1972adda94e16b58622f699fae76913f" => :mavericks
+    sha1 "a39c00a4c6a95a63ed173d88b0b0ba0fe5ef151a" => :mountain_lion
+    sha1 "f222f24dd08aaa4a3a678c8660930525d3cd861b" => :lion
   end
 
   resource "man" do
-    url "https://www.kernel.org/pub/software/scm/git/git-manpages-2.0.0.tar.gz"
-    sha1 "0cac84ebb05cf063bafad8cefd8a1ef786eeeb9c"
+    url "https://www.kernel.org/pub/software/scm/git/git-manpages-2.1.2.tar.gz"
+    sha1 "912ff9865d6c6ab3d411566a6805431c7d653efd"
   end
 
   resource "html" do
-    url "https://www.kernel.org/pub/software/scm/git/git-htmldocs-2.0.0.tar.gz"
-    sha1 "3bfc01de98e3d795c02a1bb639a5e65449b4d7cb"
+    url "https://www.kernel.org/pub/software/scm/git/git-htmldocs-2.1.2.tar.gz"
+    sha1 "229b697db2c6f7ba0831842849f9dc0651f0fc63"
   end
 
   option 'with-blk-sha1', 'Compile with the block-optimized SHA1 implementation'
   option 'without-completions', 'Disable bash/zsh completions from "contrib" directory'
   option 'with-brewed-openssl', "Build with Homebrew OpenSSL instead of the system version"
   option 'with-brewed-curl', "Use Homebrew's version of cURL library"
+  option 'with-brewed-svn', "Use Homebrew's version of SVN"
   option 'with-persistent-https', 'Build git-remote-persistent-https from "contrib" directory'
 
   depends_on 'pcre' => :optional
@@ -34,6 +36,11 @@ class Git < Formula
   depends_on 'openssl' if build.with? 'brewed-openssl'
   depends_on 'curl' if build.with? 'brewed-curl'
   depends_on 'go' => :build if build.with? 'persistent-https'
+  depends_on 'subversion' => 'perl' if build.with? 'brewed-svn'
+
+  # This patch fixes Makefile bug contrib/subtree
+  # http://thread.gmane.org/gmane.comp.version-control.git/255347
+  patch :DATA
 
   def install
     # If these things are installed, tell Git build system to not use them
@@ -44,13 +51,17 @@ class Git < Formula
     ENV['PYTHON_PATH'] = which 'python'
     ENV['PERL_PATH'] = which 'perl'
 
-    if MacOS.version >= :mavericks
+    perl_version = /\d\.\d+/.match(`perl --version`)
+
+    if build.with? 'brewed-svn'
+      ENV["PERLLIB_EXTRA"] = "#{Formula["subversion"].prefix}/Library/Perl/#{perl_version}/darwin-thread-multi-2level"
+    elsif MacOS.version >= :mavericks
       ENV["PERLLIB_EXTRA"] = %W{
         #{MacOS.active_developer_dir}
         /Library/Developer/CommandLineTools
         /Applications/Xcode.app/Contents/Developer
       }.uniq.map { |p|
-        "#{p}/Library/Perl/5.16/darwin-thread-multi-2level"
+        "#{p}/Library/Perl/#{perl_version}/darwin-thread-multi-2level"
       }.join(":")
     end
 
@@ -75,8 +86,6 @@ class Git < Formula
                    "CFLAGS=#{ENV.cflags}",
                    "LDFLAGS=#{ENV.ldflags}",
                    "install"
-
-    bin.install Dir["contrib/remote-helpers/git-remote-{hg,bzr}"]
 
     # Install the OS X keychain credential helper
     cd 'contrib/credential/osxkeychain' do
@@ -120,8 +129,9 @@ class Git < Formula
     man.install resource('man')
     (share+'doc/git-doc').install resource('html')
 
-    # Make html docs world-readable; check if this is still needed at 1.8.6
+    # Make html docs world-readable
     chmod 0644, Dir["#{share}/doc/git-doc/**/*.{html,txt}"]
+    chmod 0755, Dir["#{share}/doc/git-doc/{RelNotes,howto,technical}"]
   end
 
   def caveats; <<-EOS.undent
@@ -139,3 +149,22 @@ class Git < Formula
     end
   end
 end
+
+__END__
+--- a/contrib/subtree/Makefile
++++ b/contrib/subtree/Makefile
+@@ -1,3 +1,5 @@
++all::
++
+ -include ../../config.mak.autogen
+ -include ../../config.mak
+ 
+@@ -34,7 +36,7 @@ GIT_SUBTREE_XML := git-subtree.xml
+ GIT_SUBTREE_TXT := git-subtree.txt
+ GIT_SUBTREE_HTML := git-subtree.html
+ 
+-all: $(GIT_SUBTREE)
++all:: $(GIT_SUBTREE)
+ 
+ $(GIT_SUBTREE): $(GIT_SUBTREE_SH)
+ 	sed -e '1s|#!.*/sh|#!$(SHELL_PATH_SQ)|' $< >$@

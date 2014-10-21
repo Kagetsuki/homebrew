@@ -2,30 +2,37 @@ require "formula"
 
 class Awscli < Formula
   homepage "https://aws.amazon.com/cli/"
-  url "https://pypi.python.org/packages/source/a/awscli/awscli-1.3.11.tar.gz"
-  sha1 "18050c58ac8ce9553aed22ac0b8950df21d7c4fe"
+  url "https://pypi.python.org/packages/source/a/awscli/awscli-1.5.2.tar.gz"
+  sha1 "c852bf5529547eca91a15f81116fa011ef5d0ae9"
+
+  bottle do
+    cellar :any
+    sha1 "8c32525166e645d57f9ecef9673af8d56cf664f2" => :yosemite
+    sha1 "4eb0ebddd7aa8f48e52f44c886f668c4d1a2d207" => :mavericks
+    sha1 "0aec1c7947c8827fb42566fd6b84e0918ad4f2a9" => :mountain_lion
+  end
 
   head do
-    url "https://github.com/aws/aws-cli.git", :branch => :develop
+    url "https://github.com/aws/aws-cli.git", :branch => "develop"
 
     resource "botocore" do
-      url "https://github.com/boto/botocore.git", :branch => :develop
+      url "https://github.com/boto/botocore.git", :branch => "develop"
     end
 
     resource "bcdoc" do
-      url "https://github.com/boto/bcdoc.git", :branch => :develop
+      url "https://github.com/boto/bcdoc.git", :branch => "develop"
     end
 
     resource "jmespath" do
-      url "https://github.com/boto/jmespath.git", :branch => :develop
+      url "https://github.com/boto/jmespath.git", :branch => "develop"
     end
   end
 
   depends_on :python if MacOS.version <= :snow_leopard
 
   resource "botocore" do
-    url "https://pypi.python.org/packages/source/b/botocore/botocore-0.45.0.tar.gz"
-    sha1 "b3bcf0065458a3fd5c172701cd88614b05ef41eb"
+    url "https://pypi.python.org/packages/source/b/botocore/botocore-0.66.0.tar.gz"
+    sha1 "d864e80627c1eb6cb33ffcb75fd486e09da661cb"
   end
 
   resource "bcdoc" do
@@ -34,8 +41,8 @@ class Awscli < Formula
   end
 
   resource "six" do
-    url "https://pypi.python.org/packages/source/s/six/six-1.6.1.tar.gz"
-    sha1 "2a7941cc2233d9ad6d7d54dd5265d1eb9726c5a1"
+    url "https://pypi.python.org/packages/source/s/six/six-1.8.0.tar.gz"
+    sha1 "aa3b0659cbc85c6c7a91efc51f2d1007040070cd"
   end
 
   resource "colorama" do
@@ -44,8 +51,8 @@ class Awscli < Formula
   end
 
   resource "docutils" do
-    url "https://pypi.python.org/packages/source/d/docutils/docutils-0.11.tar.gz"
-    sha1 "3894ebcbcbf8aa54ce7c3d2c8f05460544912d67"
+    url "https://pypi.python.org/packages/source/d/docutils/docutils-0.12.tar.gz"
+    sha1 "002450621b33c5690060345b0aac25bc2426d675"
   end
 
   resource "rsa" do
@@ -56,18 +63,10 @@ class Awscli < Formula
   def install
     ENV["PYTHONPATH"] = lib+"python2.7/site-packages"
     ENV.prepend_create_path "PYTHONPATH", libexec+"lib/python2.7/site-packages"
-    install_args = [ "setup.py", "install", "--prefix=#{libexec}" ]
 
-    if build.head? then
-      resource("jmespath").stage { system "python", *install_args }
+    resources.each do |r|
+      r.stage { system "python", "setup.py", "install", "--prefix=#{libexec}" }
     end
-
-    resource("botocore").stage { system "python", *install_args }
-    resource("bcdoc").stage { system "python", *install_args }
-    resource("six").stage { system "python", *install_args }
-    resource("colorama").stage { system "python", *install_args }
-    resource("docutils").stage { system "python", *install_args }
-    resource("rsa").stage { system "python", *install_args }
 
     system "python", "setup.py", "install", "--prefix=#{prefix}",
       "--single-version-externally-managed", "--record=installed.txt"

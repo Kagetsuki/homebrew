@@ -2,8 +2,10 @@ require "formula"
 
 class Elasticsearch < Formula
   homepage "http://www.elasticsearch.org"
-  url "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-1.2.0.tar.gz"
-  sha1 "e9d2965751ffc8810be8e78543a24343fac1da5a"
+  url "https://download.elasticsearch.org/elasticsearch/elasticsearch/elasticsearch-1.3.4.tar.gz"
+  sha1 "6d63c5d95a6fecf88ce1673fee2aa47720c9e300"
+
+  depends_on :java => "1.7"
 
   head do
     url "https://github.com/elasticsearch/elasticsearch.git"
@@ -26,11 +28,11 @@ class Elasticsearch < Formula
     rm_f Dir["bin/*.bat"]
 
     # Move libraries to `libexec` directory
-    libexec.install Dir['lib/*.jar']
-    (libexec/'sigar').install Dir['lib/sigar/*.{jar,dylib}']
+    libexec.install Dir["lib/*.jar"]
+    (libexec/"sigar").install Dir["lib/sigar/*.{jar,dylib}"]
 
     # Install everything else into package directory
-    prefix.install Dir['*']
+    prefix.install Dir["*"]
 
     # Remove unnecessary files
     rm_f Dir["#{lib}/sigar/*"]
@@ -46,9 +48,9 @@ class Elasticsearch < Formula
       s.gsub! /#\s*cluster\.name\: elasticsearch/, "cluster.name: #{cluster_name}"
 
       # 2. Configure paths
-      s.sub! "# path.data: /path/to/data", "path.data: #{var}/elasticsearch/"
-      s.sub! "# path.logs: /path/to/logs", "path.logs: #{var}/log/elasticsearch/"
-      s.sub! "# path.plugins: /path/to/plugins", "path.plugins: #{var}/lib/elasticsearch/plugins"
+      s.sub! /#\s*path\.data: \/path\/to.+$/, "path.data: #{var}/elasticsearch/"
+      s.sub! /#\s*path\.logs: \/path\/to.+$/, "path.logs: #{var}/log/elasticsearch/"
+      s.sub! /#\s*path\.plugins: \/path\/to.+$/, "path.plugins: #{var}/lib/elasticsearch/plugins"
 
       # 3. Bind to loopback IP for laptops roaming different networks
       s.gsub! /#\s*network\.host\: [^\n]+/, "network.host: 127.0.0.1"

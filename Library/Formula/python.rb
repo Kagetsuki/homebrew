@@ -1,15 +1,17 @@
 require "formula"
 
 class Python < Formula
-  homepage "http://www.python.org"
-  head "http://hg.python.org/cpython", :using => :hg, :branch => "2.7"
-  url "http://www.python.org/ftp/python/2.7.7/Python-2.7.7.tgz"
-  sha1 "1db01d7f325d8ceaf986976800106018b82ae45a"
+  homepage "https://www.python.org"
+  head "https://hg.python.org/cpython", :using => :hg, :branch => "2.7"
+  url "https://www.python.org/ftp/python/2.7.8/Python-2.7.8.tgz"
+  sha1 "511960dd78451a06c9df76509635aeec05b2051a"
+  revision 2
 
   bottle do
-    sha1 "4a9f0e366ec4fd69aa36cd7fa156a26b16ebfaf2" => :mavericks
-    sha1 "542b53cdf6c756d740d8b87b0ca329b35c912755" => :mountain_lion
-    sha1 "7b7d5cc528403151bb6d84042f2b16b1c22e05e2" => :lion
+    revision 3
+    sha1 "9f8d1d3bf62e78c0918822517a041a845b6703d8" => :yosemite
+    sha1 "307042fc8dd7f736b450ee5fc631197290483cf7" => :mavericks
+    sha1 "f3708ea1d1f736527c428f0026aa42499c489fe2" => :mountain_lion
   end
 
   option :universal
@@ -24,19 +26,27 @@ class Python < Formula
   depends_on "gdbm" => :recommended
   depends_on "openssl"
   depends_on "homebrew/dupes/tcl-tk" if build.with? "brewed-tk"
-  depends_on :x11 if build.with? "brewed-tk" and Tab.for_name("tcl-tk").used_options.include?("with-x11")
+  depends_on :x11 if build.with? "brewed-tk" and Tab.for_name("tcl-tk").with? "x11"
 
   skip_clean "bin/pip", "bin/pip-2.7"
   skip_clean "bin/easy_install", "bin/easy_install-2.7"
 
   resource "setuptools" do
-    url "https://pypi.python.org/packages/source/s/setuptools/setuptools-4.0.tar.gz"
-    sha1 "ff9212d50573ea9983d81d53bd11e834cf863b25"
+    url "https://pypi.python.org/packages/source/s/setuptools/setuptools-5.4.2.tar.gz"
+    sha1 "a681ba56c30c0eb66528215842d3e3fcb5157614"
   end
 
   resource "pip" do
     url "https://pypi.python.org/packages/source/p/pip/pip-1.5.6.tar.gz"
     sha1 "e6cd9e6f2fd8d28c9976313632ef8aa8ac31249e"
+  end
+
+  # Patch for pyport.h macro issue
+  # http://bugs.python.org/issue10910
+  # https://trac.macports.org/ticket/44288
+  patch do
+    url "http://bugs.python.org/file30805/issue10910-workaround.txt"
+    sha1 "9926640cb7c8e273e4b451469a2b13d4b9df5ba3"
   end
 
   # Patch to disable the search for Tk.framework, since Homebrew's Tk is
@@ -54,6 +64,12 @@ class Python < Formula
   # The HOMEBREW_PREFIX location of site-packages.
   def site_packages
     HOMEBREW_PREFIX/"lib/python2.7/site-packages"
+  end
+
+  # setuptools remembers the build flags python is built with and uses them to
+  # build packages later. Xcode-only systems need different flags.
+  def pour_bottle?
+    MacOS::CLT.installed?
   end
 
   def install
@@ -204,8 +220,7 @@ class Python < Formula
       # The setup.py looks at "-isysroot" to get the sysroot (and not at --sysroot)
       cflags += " -isysroot #{MacOS.sdk_path}"
       ldflags += " -isysroot #{MacOS.sdk_path}"
-      # Same zlib.h-not-found-bug as in env :std (see below)
-      args << "CPPFLAGS=-I#{MacOS.sdk_path}/usr/include"
+      args << "CPPFLAGS=-I#{MacOS.sdk_path}/usr/include" # find zlib
       # For the Xlib.h, Python needs this header dir with the system Tk
       if build.without? "brewed-tk"
         cflags += " -I#{MacOS.sdk_path}/System/Library/Frameworks/Tk.framework/Versions/8.5/Headers"

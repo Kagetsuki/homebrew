@@ -5,30 +5,25 @@ class Pandoc < Formula
   include Language::Haskell::Cabal
 
   homepage "http://johnmacfarlane.net/pandoc/"
-  url "https://pandoc.googlecode.com/files/pandoc-1.12.3.tar.gz"
-  sha1 "f519b5fb8c88ff4374432477dc12f68bbe238510"
+  url "https://hackage.haskell.org/package/pandoc-1.13.1/pandoc-1.13.1.tar.gz"
+  sha1 "8f3df1977cf9daa848640754515b733c13fd934a"
 
   bottle do
-    sha1 "216b78973a1c26c7091839dd7cfa8a50e2cd6fcb" => :mavericks
-    sha1 "58d063c1bb5c02dc454de94dde147003998a4e1d" => :mountain_lion
-    sha1 "17ebadac09f6c65fe450751e7c1bdae2efdeba2d" => :lion
-  end
-
-  resource "completion" do
-    url "https://github.com/dsanson/pandoc-completion.git", :branch => "master"
+    sha1 "a2caf52195e88b36d0fb16f1b931c5630cc6ea57" => :yosemite
+    sha1 "cb797a12020892b2eee7131d448692309b184d99" => :mavericks
+    sha1 "0795ad1fdea3a1d47219753ebce5d34f7311ad5b" => :mountain_lion
+    sha1 "c9c2e4e7e74b4850bcbba148d8efc6af7da47605" => :lion
   end
 
   depends_on "ghc" => :build
   depends_on "cabal-install" => :build
   depends_on "gmp"
 
+  fails_with(:clang) { build 425 } # clang segfaults on Lion
+
   def install
-    resource("completion").stage do
-      bash_completion.install "pandoc-completion.bash"
-    end
     cabal_sandbox do
-      cabal_install_tools "alex", "happy"
-      cabal_install "--only-dependencies", "--constraint=temporary==1.2.0.1"
+      cabal_install "--only-dependencies"
       cabal_install "--prefix=#{prefix}"
     end
     cabal_clean_lib

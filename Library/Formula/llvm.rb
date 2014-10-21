@@ -2,22 +2,39 @@ require 'formula'
 
 class Llvm < Formula
   homepage 'http://llvm.org/'
-  url "http://llvm.org/releases/3.4.1/llvm-3.4.1.src.tar.gz"
-  sha1 "3711baa6f5ef9df07418ce76039fc3848a7bde7c"
 
   bottle do
-    sha1 "92dc1d8793000d05c8321b2791b6b1d7321a83c3" => :mavericks
-    sha1 "a46bd08a60fd7ae17a21476bbb810510b58d492a" => :mountain_lion
-    sha1 "4dfc0268acc552bd62b2954ac3829802b25a5a46" => :lion
+    sha1 "1fc5969edc5fcffbb3e958da00ff6a1c70606262" => :mavericks
+    sha1 "c30d6cc49521fb950bd76390878c9469a780b981" => :mountain_lion
+    sha1 "0e4178a7e094b9c77431a6f37f7dc2f72acb8389" => :lion
   end
 
-  resource 'clang' do
-    url "http://llvm.org/releases/3.4.1/cfe-3.4.1.src.tar.gz"
-    sha1 "ecd38fa89e837e6cb8305b8d05e88baecb0bda55"
+  stable do
+    url "http://llvm.org/releases/3.5.0/llvm-3.5.0.src.tar.xz"
+    sha1 "58d817ac2ff573386941e7735d30702fe71267d5"
+    resource 'clang' do
+      url "http://llvm.org/releases/3.5.0/cfe-3.5.0.src.tar.xz"
+      sha1 "834cee2ed8dc6638a486d8d886b6dce3db675ffa"
+    end
+    resource 'lld' do
+      url "http://llvm.org/releases/3.5.0/lld-3.5.0.src.tar.xz"
+      sha1 "13c88e1442b482b3ffaff5934f0a2b51cab067e5"
+    end
+  end
+
+  head do
+    url "http://llvm.org/svn/llvm-project/llvm/trunk", :using => :svn
+    resource 'clang' do
+      url "http://llvm.org/svn/llvm-project/cfe/trunk", :using => :svn
+    end
+    resource 'lld' do
+      url "http://llvm.org/svn/llvm-project/lld/trunk", :using => :svn
+    end
   end
 
   option :universal
   option 'with-clang', 'Build Clang support library'
+  option 'with-lld', 'Build LLD linker'
   option 'disable-shared', "Don't build LLVM as a shared library"
   option 'all-targets', 'Build all target backends'
   option 'rtti', 'Build with C++ RTTI'
@@ -27,12 +44,21 @@ class Llvm < Formula
 
   keg_only :provided_by_osx
 
+  # Apple's libstdc++ is too old to build LLVM
+  fails_with :gcc
+  fails_with :llvm
+
   def install
+    # Apple's libstdc++ is too old to build LLVM
+    ENV.libcxx if ENV.compiler == :clang
+
     if build.with? "python" and build.include? 'disable-shared'
       raise 'The Python bindings need the shared library.'
     end
 
     (buildpath/"tools/clang").install resource("clang") if build.with? "clang"
+
+    (buildpath/"tools/lld").install resource("lld") if build.with? "lld"
 
     if build.universal?
       ENV.permit_arch_flags
@@ -78,7 +104,8 @@ class Llvm < Formula
 
   def caveats
     <<-EOS.undent
-      Extra tools are installed in #{share}/llvm and #{share}/clang.
+      LLVM executables are installed in #{opt_bin}.
+      Extra tools are installed in #{opt_share}/llvm.
 
       If you already have LLVM installed, then "brew upgrade llvm" might not work.
       Instead, try:

@@ -4,6 +4,13 @@ class Libquicktime < Formula
   homepage 'http://libquicktime.sourceforge.net/'
   url 'https://downloads.sourceforge.net/project/libquicktime/libquicktime/1.2.4/libquicktime-1.2.4.tar.gz'
   sha1 '7008b2dc27b9b40965bd2df42d39ff4cb8b6305e'
+  revision 1
+
+  bottle do
+    sha1 "f9384524cbc1a0bf3f60f271c46de8788199c95a" => :mavericks
+    sha1 "eaa29f1dcc58bade8cc09cb83d2c55a8d2093320" => :mountain_lion
+    sha1 "636ba56cf11acd853f524df9a73720015ad11db6" => :lion
+  end
 
   depends_on 'pkg-config' => :build
   depends_on 'gettext'

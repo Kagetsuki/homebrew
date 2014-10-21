@@ -1,19 +1,32 @@
-require 'formula'
+require "formula"
 
 class Snort < Formula
-  homepage 'http://www.snort.org'
-  url 'http://www.snort.org/dl/snort-current/snort-2.9.6.1.tar.gz'
-  sha1 '49da9b989fa59114a6e533b26383cb1a7df9b717'
+  homepage "https://www.snort.org"
+  revision 1
 
-  depends_on 'daq'
-  depends_on 'libdnet'
-  depends_on 'pcre'
+  stable do
+    url "https://www.snort.org/downloads/snort/snort-2.9.6.2.tar.gz"
+    sha1 "09068bc88dbb3fe47b2bff5803a7b3ef0c98395b"
+    fails_with :clang
+  end
 
-  option 'enable-debug', "Compile Snort with --enable-debug and --enable-debug-msgs"
+  devel do
+    url "https://www.snort.org/downloads/snortdev/snort-2.9.7.0_rc.tar.gz"
+    sha1 "945090c3a1a726f9e05c4538903492928dba901f"
 
-  fails_with :clang
+    depends_on "luajit"
+  end
+
+  depends_on "daq"
+  depends_on "libdnet"
+  depends_on "pcre"
+  depends_on "openssl"
+
+  option "enable-debug", "Compile Snort with --enable-debug and --enable-debug-msgs"
 
   def install
+    openssl = Formula["openssl"]
+
     args = %W[--prefix=#{prefix}
               --disable-dependency-tracking
               --enable-gre
@@ -22,13 +35,15 @@ class Snort < Formula
               --enable-ppm
               --enable-perfprofiling
               --enable-zlib
+              --with-openssl-includes=#{openssl.opt_include}
+              --with-openssl-libraries=#{openssl.opt_lib}
               --enable-active-response
               --enable-normalizer
               --enable-reload
               --enable-react
               --enable-flexresp3]
 
-    if build.include? 'enable-debug'
+    if build.include? "enable-debug"
       args << "--enable-debug"
       args << "--enable-debug-msgs"
     else
@@ -36,7 +51,7 @@ class Snort < Formula
     end
 
     system "./configure", *args
-    system "make install"
+    system "make", "install"
   end
 
   def caveats; <<-EOS.undent

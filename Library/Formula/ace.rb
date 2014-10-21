@@ -2,8 +2,14 @@ require "formula"
 
 class Ace < Formula
   homepage "http://www.cse.wustl.edu/~schmidt/ACE.html"
-  url "http://download.dre.vanderbilt.edu/previous_versions/ACE-6.2.6.tar.bz2"
-  sha1 "245cf37f60a92bf912ae2a008d73587a8d19462e"
+  url "http://download.dre.vanderbilt.edu/previous_versions/ACE-6.2.8.tar.bz2"
+  sha1 "937fb405226a5aee1dd2fad9d67a3218ac830ca2"
+
+  bottle do
+    sha1 "5a245967287d14d0dbd0ddc35fe971e8509a7792" => :mavericks
+    sha1 "ffa55ce311ac79937f8a427507b9993b45f46430" => :mountain_lion
+    sha1 "45fec92c123f8049e3d8c045b44845444c0ca1d2" => :lion
+  end
 
   def install
     # ACE has two methods of compilation, "traditional" and ./configure.
